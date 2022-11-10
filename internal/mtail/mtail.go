@@ -54,6 +54,11 @@ type Server struct {
 	httpInfoEndpoints  bool   // if set, mtail will enable info endpoints for progz and varz
 }
 
+// GetRegistry get registry from mtail.Server
+func (m *Server) GetRegistry() *prometheus.Registry {
+	return m.reg
+}
+
 // initRuntime constructs a new runtime and performs the initial load of program files in the program directory.
 func (m *Server) initRuntime() (err error) {
 	m.r, err = runtime.New(m.lines, &m.wg, m.programPath, m.store, m.rOpts...)
