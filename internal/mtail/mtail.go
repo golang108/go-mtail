@@ -237,3 +237,29 @@ func (m *Server) Run() error {
 	}
 	return nil
 }
+
+func NewMtail(ctx context.Context, store *metrics.Store, options ...Option) (*Server, error) {
+	m := &Server{
+		ctx:   ctx,
+		store: store,
+		lines: make(chan *logline.LogLine),
+		// Using a non-pedantic registry means we can be looser with metrics that
+		// are not fully specified at startup.
+		reg: prometheus.NewRegistry(),
+	}
+
+	if err := m.SetOption(options...); err != nil {
+		return nil, err
+	}
+	if err := m.initExporter(); err != nil {
+		return nil, err
+	}
+	if err := m.initRuntime(); err != nil {
+		return nil, err
+	}
+	if err := m.initTailer(); err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
