@@ -9,54 +9,61 @@ import (
 	"time"
 )
 
-func GetRegistry(ctx context.Context) (_ *prometheus.Registry, err error) {
-	progs := ""
-	logs := []string{"1", "2"}
-	ignoreFileRegPattern := ""
+type Option struct {
+	NamePrefix string
+	Version    string
+	Progs      string
+	Logs       []string
+
+	IgnoreFileRegPattern string
+	OverrideTimeZone     string
+	OmitProgLabel        bool
+	EmitMetricTimestamp  bool
+	PollInterval         time.Duration
+	PollLogInterval      time.Duration
+	MetricPushInterval   time.Duration
+	MaxRegexpLen         int
+	MaxRecursionDepth    int
+	SyslogUseCurrentYear bool
+	LogRuntimeErrors     bool
+}
+
+func GetRegistry(ctx context.Context, ins Option) (_ *prometheus.Registry, err error) {
 	buildInfo := mtail.BuildInfo{
-		Version:  "version",
-		Branch:   "branch",
-		Revision: "Revision",
+		Version: ins.Version,
 	}
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	metricPushInterval := 1 * time.Minute
-	maxRegexpLen := 1024
-	maxRecursionDepth := 100
+	loc, err := time.LoadLocation(ins.OverrideTimeZone)
+	if err != nil {
+		return nil, err
+	}
 
 	opts := []mtail.Option{
-		mtail.ProgramPath(progs),
-		mtail.LogPathPatterns(logs...),
-		mtail.IgnoreRegexPattern(ignoreFileRegPattern),
+		mtail.ProgramPath(ins.Progs),
+		mtail.LogPathPatterns(ins.Logs...),
+		mtail.IgnoreRegexPattern(ins.IgnoreFileRegPattern),
 		mtail.SetBuildInfo(buildInfo),
 		mtail.OverrideLocation(loc),
-		mtail.MetricPushInterval(metricPushInterval),
-		mtail.MaxRegexpLength(maxRegexpLen),
-		mtail.MaxRecursionDepth(maxRecursionDepth),
+		mtail.MetricPushInterval(ins.MetricPushInterval), // keep it here ?
+		mtail.MaxRegexpLength(ins.MaxRegexpLen),
+		mtail.MaxRecursionDepth(ins.MaxRecursionDepth),
 		mtail.LogRuntimeErrors,
 	}
 
 	staleLogGcWaker := waker.NewTimed(ctx, time.Hour)
 	opts = append(opts, mtail.StaleLogGcWaker(staleLogGcWaker))
 
-	pollInterval := 250 * time.Millisecond
-	pollLogInterval := 250 * time.Millisecond
-	if pollInterval > 0 {
-		logStreamPollWaker := waker.NewTimed(ctx, pollInterval)
-		logPatternPollWaker := waker.NewTimed(ctx, pollLogInterval)
+	if ins.PollInterval > 0 {
+		logStreamPollWaker := waker.NewTimed(ctx, ins.PollInterval)
+		logPatternPollWaker := waker.NewTimed(ctx, ins.PollLogInterval)
 		opts = append(opts, mtail.LogPatternPollWaker(logPatternPollWaker), mtail.LogstreamPollWaker(logStreamPollWaker))
 	}
-	sysLogUseCurrentYear := true
-	if sysLogUseCurrentYear {
+	if ins.SyslogUseCurrentYear {
 		opts = append(opts, mtail.SyslogUseCurrentYear)
 	}
-
-	emitProgLabel := true
-	if emitProgLabel {
+	if ins.OmitProgLabel {
 		opts = append(opts, mtail.OmitProgLabel)
 	}
-
-	emitMetricTimestamp := true
-	if emitMetricTimestamp {
+	if ins.EmitMetricTimestamp {
 		opts = append(opts, mtail.EmitMetricTimestamp)
 	}
 
